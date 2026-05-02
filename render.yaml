@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: yt-converter
+    env: node
+    buildCommand: "npm install && apt-get update && apt-get install -y yt-dlp ffmpeg"
+    startCommand: "node server.js"

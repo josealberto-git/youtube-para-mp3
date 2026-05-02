@@ -1,20 +1,18 @@
 import express from "express";
 import cors from "cors";
 import { spawn } from "child_process";
+import fs from "fs";
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.static("downloads"));
 
-// pegar thumbnail antes
+// 🎬 INFO (thumbnail)
 app.get("/info", (req, res) => {
   const { link } = req.query;
 
-  const proc = spawn("yt-dlp", [
-    "--dump-json",
-    link
-  ]);
+  const proc = spawn("yt-dlp", ["--dump-json", link]);
 
   let data = "";
 
@@ -33,7 +31,7 @@ app.get("/info", (req, res) => {
   });
 });
 
-// progresso completo
+// 📊 PROGRESSO
 app.get("/progress", (req, res) => {
   const { link, format } = req.query;
 
@@ -71,7 +69,12 @@ app.get("/progress", (req, res) => {
       file: `${id}.${format}`
     })}\n\n`);
     res.end();
+
+    // limpa depois
+    setTimeout(() => {
+      fs.unlink(file, () => {});
+    }, 600000);
   });
 });
 
-app.listen(3000, () => console.log("Rodando"));
+app.listen(3000, () => console.log("Rodando..."));

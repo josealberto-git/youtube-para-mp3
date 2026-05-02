@@ -5,46 +5,32 @@
 <title>Converter PRO</title>
 
 <style>
-*{box-sizing:border-box}
-
 body{
   margin:0;
-  font-family:Arial, sans-serif;
+  font-family:Arial;
   background:#0b0b0b;
   color:#fff;
 }
 
-/* HEADER */
 .header{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  padding:15px 30px;
+  padding:15px;
   background:#111;
-}
-
-.logo{
-  font-size:20px;
-  font-weight:bold;
   color:red;
+  font-weight:bold;
 }
 
-/* CONTAINER */
 .container{
-  max-width:900px;
+  max-width:800px;
   margin:auto;
   padding:20px;
 }
 
-/* CARD */
 .card{
   background:#181818;
-  border-radius:12px;
   padding:20px;
-  box-shadow:0 0 20px rgba(0,0,0,0.5);
+  border-radius:12px;
 }
 
-/* INPUT */
 input,select,button{
   width:100%;
   padding:12px;
@@ -53,32 +39,19 @@ input,select,button{
   border-radius:8px;
 }
 
-input,select{
-  background:#222;
-  color:#fff;
-}
-
 button{
   background:red;
-  color:#fff;
-  font-weight:bold;
+  color:white;
   cursor:pointer;
-  transition:0.2s;
 }
 
-button:hover{
-  background:#cc0000;
-}
-
-/* THUMB */
 .thumb{
   width:100%;
+  margin-top:10px;
   border-radius:10px;
-  margin-top:15px;
   display:none;
 }
 
-/* PROGRESS */
 .bar{
   height:20px;
   background:#333;
@@ -91,54 +64,19 @@ button:hover{
   height:100%;
   width:0%;
   background:linear-gradient(90deg, red, orange);
-  transition:0.3s;
 }
 
-/* STATUS */
 .status{
   margin-top:10px;
-  font-size:14px;
-  color:#ccc;
-}
-
-/* GRID (estilo Netflix) */
-.grid{
-  display:grid;
-  grid-template-columns:repeat(auto-fill,minmax(150px,1fr));
-  gap:15px;
-  margin-top:30px;
-}
-
-.video-card{
-  background:#222;
-  border-radius:10px;
-  overflow:hidden;
-  transition:0.3s;
-}
-
-.video-card:hover{
-  transform:scale(1.05);
-}
-
-.video-card img{
-  width:100%;
-}
-
-.video-card p{
-  padding:10px;
-  font-size:13px;
 }
 </style>
 </head>
 
 <body>
 
-<div class="header">
-  <div class="logo">🎬 Converter PRO</div>
-</div>
+<div class="header">🎬 Converter PRO</div>
 
 <div class="container">
-
   <div class="card">
 
     <input id="link" placeholder="Cole o link do vídeo">
@@ -153,81 +91,72 @@ button:hover{
     <img id="thumb" class="thumb">
 
     <div class="bar">
-      <div class="fill" id="fill"></div>
+      <div id="fill" class="fill"></div>
     </div>
 
-    <div class="status" id="status"></div>
+    <div id="status" class="status"></div>
 
   </div>
-
-  <!-- estilo Netflix (histórico visual) -->
-  <div class="grid" id="history"></div>
-
 </div>
 
 <script>
-let historyList = [];
-
 async function start(){
-  let link = document.getElementById("link").value;
-  let format = document.getElementById("format").value;
+  const link = document.getElementById("link").value;
+  const format = document.getElementById("format").value;
+
+  const status = document.getElementById("status");
+  const fill = document.getElementById("fill");
+  const thumb = document.getElementById("thumb");
+
+  if(!link){
+    alert("Cole um link!");
+    return;
+  }
 
   status.innerText = "Carregando...";
 
-  // pegar info
-  let info = await fetch(`https://SEU-APP.onrender.com/info?link=${encodeURIComponent(link)}`);
-  let data = await info.json();
+  try{
+    // thumbnail
+    let info = await fetch("https://SEU-APP.onrender.com/info?link=" + encodeURIComponent(link));
+    let data = await info.json();
 
-  if(data.thumb){
-    thumb.src = data.thumb;
-    thumb.style.display = "block";
+    if(data.thumb){
+      thumb.src = data.thumb;
+      thumb.style.display = "block";
+    }
+
+    const evt = new EventSource(
+      "https://SEU-APP.onrender.com/progress?link=" +
+      encodeURIComponent(link) + "&format=" + format
+    );
+
+    evt.onmessage = (e) => {
+      let d = JSON.parse(e.data);
+
+      if(d.done){
+        fill.style.width = "100%";
+
+        let url = "https://SEU-APP.onrender.com/" + d.file;
+        status.innerHTML = `<a href="${url}" target="_blank">⬇️ Baixar</a>`;
+
+        evt.close();
+        return;
+      }
+
+      if(d.percent){
+        fill.style.width = d.percent + "%";
+      }
+
+      status.innerHTML = `
+        ${d.percent || 0}%<br>
+        ⚡ ${d.speed || "..."}<br>
+        ⏱ ${d.eta || "..."}
+      `;
+    };
+
+  }catch{
+    status.innerText = "Erro!";
   }
-
-  const evt = new EventSource(
-    `https://SEU-APP.onrender.com/progress?link=${encodeURIComponent(link)}&format=${format}`
-  );
-
-  evt.onmessage = (e) => {
-    let d = JSON.parse(e.data);
-
-    if(d.done){
-      fill.style.width = "100%";
-
-      let url = `https://SEU-APP.onrender.com/${d.file}`;
-
-      status.innerHTML = `<a href="${url}" target="_blank">⬇️ Baixar</a>`;
-
-      // adicionar no "Netflix grid"
-      historyList.unshift({
-        thumb: thumb.src,
-        url: url
-      });
-
-      renderHistory();
-
-      evt.close();
-      return;
-    }
-
-    if(d.percent){
-      fill.style.width = d.percent + "%";
-    }
-
-    status.innerHTML = `
-      ${d.percent || 0}%<br>
-      ⚡ ${d.speed || "..."}<br>
-      ⏱ ${d.eta || "..."}
-    `;
-  };
-}
-
-function renderHistory(){
-  history.innerHTML = historyList.map(v => `
-    <div class="video-card">
-      <img src="${v.thumb}">
-      <p><a href="${v.url}" target="_blank">Baixar</a></p>
-    </div>
-  `).join("");
 }
 </script>
 
