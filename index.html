@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Painel PRO</title>
+
+<style>
+body{font-family:Arial;background:#0b1220;color:#fff;text-align:center}
+.box{background:#121a2b;padding:20px;border-radius:10px;width:300px;margin:auto;margin-top:50px}
+input,button,select{width:100%;margin-top:10px;padding:10px;border:none;border-radius:8px}
+button{background:red;color:white}
+</style>
+</head>
+
+<body>
+
+<div class="box" id="auth">
+  <h3>Login</h3>
+  <input id="user" placeholder="Usuário">
+  <input id="pass" type="password" placeholder="Senha">
+  <button onclick="login()">Entrar</button>
+  <button onclick="register()">Registrar</button>
+</div>
+
+<div class="box" id="panel" style="display:none">
+  <h3>Painel</h3>
+
+  <input id="link" placeholder="Link">
+  <select id="format">
+    <option value="mp3">MP3</option>
+    <option value="mp4">MP4</option>
+  </select>
+
+  <button onclick="convert()">Converter</button>
+
+  <h4>Histórico</h4>
+  <div id="history"></div>
+</div>
+
+<script>
+let token = "";
+
+async function register(){
+  await fetch("https://SEU-APP.onrender.com/register", {
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({
+      user: user.value,
+      pass: pass.value
+    })
+  });
+  alert("Registrado!");
+}
+
+async function login(){
+  let res = await fetch("https://SEU-APP.onrender.com/login", {
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({
+      user: user.value,
+      pass: pass.value
+    })
+  });
+
+  let data = await res.json();
+
+  if(data.token){
+    token = data.token;
+    auth.style.display="none";
+    panel.style.display="block";
+    loadHistory();
+  }else{
+    alert("Erro");
+  }
+}
+
+async function convert(){
+  let res = await fetch("https://SEU-APP.onrender.com/convert", {
+    method:"POST",
+    headers:{
+      "Content-Type":"application/json",
+      "Authorization": token
+    },
+    body: JSON.stringify({
+      link: link.value,
+      format: format.value
+    })
+  });
+
+  let data = await res.json();
+
+  if(data.download){
+    alert("Pronto!");
+    loadHistory();
+  }
+}
+
+async function loadHistory(){
+  let res = await fetch("https://SEU-APP.onrender.com/history", {
+    headers:{ "Authorization": token }
+  });
+
+  let data = await res.json();
+
+  history.innerHTML = data.map(h =>
+    `<p><a href="${h.url}" target="_blank">${h.format}</a></p>`
+  ).join("");
+}
+</script>
+
+</body>
+</html>
