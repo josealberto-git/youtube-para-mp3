@@ -2,109 +2,232 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Painel PRO</title>
+<title>Converter PRO</title>
 
 <style>
-body{font-family:Arial;background:#0b1220;color:#fff;text-align:center}
-.box{background:#121a2b;padding:20px;border-radius:10px;width:300px;margin:auto;margin-top:50px}
-input,button,select{width:100%;margin-top:10px;padding:10px;border:none;border-radius:8px}
-button{background:red;color:white}
+*{box-sizing:border-box}
+
+body{
+  margin:0;
+  font-family:Arial, sans-serif;
+  background:#0b0b0b;
+  color:#fff;
+}
+
+/* HEADER */
+.header{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:15px 30px;
+  background:#111;
+}
+
+.logo{
+  font-size:20px;
+  font-weight:bold;
+  color:red;
+}
+
+/* CONTAINER */
+.container{
+  max-width:900px;
+  margin:auto;
+  padding:20px;
+}
+
+/* CARD */
+.card{
+  background:#181818;
+  border-radius:12px;
+  padding:20px;
+  box-shadow:0 0 20px rgba(0,0,0,0.5);
+}
+
+/* INPUT */
+input,select,button{
+  width:100%;
+  padding:12px;
+  margin-top:10px;
+  border:none;
+  border-radius:8px;
+}
+
+input,select{
+  background:#222;
+  color:#fff;
+}
+
+button{
+  background:red;
+  color:#fff;
+  font-weight:bold;
+  cursor:pointer;
+  transition:0.2s;
+}
+
+button:hover{
+  background:#cc0000;
+}
+
+/* THUMB */
+.thumb{
+  width:100%;
+  border-radius:10px;
+  margin-top:15px;
+  display:none;
+}
+
+/* PROGRESS */
+.bar{
+  height:20px;
+  background:#333;
+  border-radius:10px;
+  margin-top:10px;
+  overflow:hidden;
+}
+
+.fill{
+  height:100%;
+  width:0%;
+  background:linear-gradient(90deg, red, orange);
+  transition:0.3s;
+}
+
+/* STATUS */
+.status{
+  margin-top:10px;
+  font-size:14px;
+  color:#ccc;
+}
+
+/* GRID (estilo Netflix) */
+.grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(150px,1fr));
+  gap:15px;
+  margin-top:30px;
+}
+
+.video-card{
+  background:#222;
+  border-radius:10px;
+  overflow:hidden;
+  transition:0.3s;
+}
+
+.video-card:hover{
+  transform:scale(1.05);
+}
+
+.video-card img{
+  width:100%;
+}
+
+.video-card p{
+  padding:10px;
+  font-size:13px;
+}
 </style>
 </head>
 
 <body>
 
-<div class="box" id="auth">
-  <h3>Login</h3>
-  <input id="user" placeholder="Usuário">
-  <input id="pass" type="password" placeholder="Senha">
-  <button onclick="login()">Entrar</button>
-  <button onclick="register()">Registrar</button>
+<div class="header">
+  <div class="logo">🎬 Converter PRO</div>
 </div>
 
-<div class="box" id="panel" style="display:none">
-  <h3>Painel</h3>
+<div class="container">
 
-  <input id="link" placeholder="Link">
-  <select id="format">
-    <option value="mp3">MP3</option>
-    <option value="mp4">MP4</option>
-  </select>
+  <div class="card">
 
-  <button onclick="convert()">Converter</button>
+    <input id="link" placeholder="Cole o link do vídeo">
 
-  <h4>Histórico</h4>
-  <div id="history"></div>
+    <select id="format">
+      <option value="mp3">MP3</option>
+      <option value="mp4">MP4</option>
+    </select>
+
+    <button onclick="start()">Converter</button>
+
+    <img id="thumb" class="thumb">
+
+    <div class="bar">
+      <div class="fill" id="fill"></div>
+    </div>
+
+    <div class="status" id="status"></div>
+
+  </div>
+
+  <!-- estilo Netflix (histórico visual) -->
+  <div class="grid" id="history"></div>
+
 </div>
 
 <script>
-let token = "";
+let historyList = [];
 
-async function register(){
-  await fetch("https://SEU-APP.onrender.com/register", {
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({
-      user: user.value,
-      pass: pass.value
-    })
-  });
-  alert("Registrado!");
-}
+async function start(){
+  let link = document.getElementById("link").value;
+  let format = document.getElementById("format").value;
 
-async function login(){
-  let res = await fetch("https://SEU-APP.onrender.com/login", {
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({
-      user: user.value,
-      pass: pass.value
-    })
-  });
+  status.innerText = "Carregando...";
 
-  let data = await res.json();
+  // pegar info
+  let info = await fetch(`https://SEU-APP.onrender.com/info?link=${encodeURIComponent(link)}`);
+  let data = await info.json();
 
-  if(data.token){
-    token = data.token;
-    auth.style.display="none";
-    panel.style.display="block";
-    loadHistory();
-  }else{
-    alert("Erro");
+  if(data.thumb){
+    thumb.src = data.thumb;
+    thumb.style.display = "block";
   }
+
+  const evt = new EventSource(
+    `https://SEU-APP.onrender.com/progress?link=${encodeURIComponent(link)}&format=${format}`
+  );
+
+  evt.onmessage = (e) => {
+    let d = JSON.parse(e.data);
+
+    if(d.done){
+      fill.style.width = "100%";
+
+      let url = `https://SEU-APP.onrender.com/${d.file}`;
+
+      status.innerHTML = `<a href="${url}" target="_blank">⬇️ Baixar</a>`;
+
+      // adicionar no "Netflix grid"
+      historyList.unshift({
+        thumb: thumb.src,
+        url: url
+      });
+
+      renderHistory();
+
+      evt.close();
+      return;
+    }
+
+    if(d.percent){
+      fill.style.width = d.percent + "%";
+    }
+
+    status.innerHTML = `
+      ${d.percent || 0}%<br>
+      ⚡ ${d.speed || "..."}<br>
+      ⏱ ${d.eta || "..."}
+    `;
+  };
 }
 
-async function convert(){
-  let res = await fetch("https://SEU-APP.onrender.com/convert", {
-    method:"POST",
-    headers:{
-      "Content-Type":"application/json",
-      "Authorization": token
-    },
-    body: JSON.stringify({
-      link: link.value,
-      format: format.value
-    })
-  });
-
-  let data = await res.json();
-
-  if(data.download){
-    alert("Pronto!");
-    loadHistory();
-  }
-}
-
-async function loadHistory(){
-  let res = await fetch("https://SEU-APP.onrender.com/history", {
-    headers:{ "Authorization": token }
-  });
-
-  let data = await res.json();
-
-  history.innerHTML = data.map(h =>
-    `<p><a href="${h.url}" target="_blank">${h.format}</a></p>`
-  ).join("");
+function renderHistory(){
+  history.innerHTML = historyList.map(v => `
+    <div class="video-card">
+      <img src="${v.thumb}">
+      <p><a href="${v.url}" target="_blank">Baixar</a></p>
+    </div>
+  `).join("");
 }
 </script>
 

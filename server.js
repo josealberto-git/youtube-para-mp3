@@ -1,87 +1,77 @@
 import express from "express";
 import cors from "cors";
-import fs from "fs";
-import jwt from "jsonwebtoken";
-import { exec } from "child_process";
+import { spawn } from "child_process";
 
 const app = express();
-app.use(express.json());
 app.use(cors());
+app.use(express.json());
 app.use(express.static("downloads"));
 
-const SECRET = "123456";
+// pegar thumbnail antes
+app.get("/info", (req, res) => {
+  const { link } = req.query;
 
-// banco simples
-let users = [];
-let history = [];
+  const proc = spawn("yt-dlp", [
+    "--dump-json",
+    link
+  ]);
 
-// 🔐 REGISTRO
-app.post("/register", (req, res) => {
-  const { user, pass } = req.body;
+  let data = "";
 
-  if (users.find(u => u.user === user)) {
-    return res.json({ error: "Usuário já existe" });
-  }
+  proc.stdout.on("data", chunk => data += chunk);
 
-  users.push({ user, pass });
-  res.json({ ok: true });
-});
-
-// 🔐 LOGIN
-app.post("/login", (req, res) => {
-  const { user, pass } = req.body;
-
-  const u = users.find(x => x.user === user && x.pass === pass);
-  if (!u) return res.json({ error: "Login inválido" });
-
-  const token = jwt.sign({ user }, SECRET);
-  res.json({ token });
-});
-
-// 🔒 MIDDLEWARE
-function auth(req, res, next){
-  const token = req.headers.authorization;
-  if(!token) return res.sendStatus(403);
-
-  try{
-    req.user = jwt.verify(token, SECRET);
-    next();
-  }catch{
-    res.sendStatus(403);
-  }
-}
-
-// 🎬 CONVERTER
-app.post("/convert", auth, (req, res) => {
-  const { link, format } = req.body;
-  const id = Date.now();
-  const file = `downloads/${id}.${format}`;
-
-  const cmd =
-    format === "mp3"
-      ? `yt-dlp -x --audio-format mp3 -o "${file}" ${link}`
-      : `yt-dlp -f mp4 -o "${file}" ${link}`;
-
-  exec(cmd, (err) => {
-    if (err) return res.json({ error: "Erro" });
-
-    const url = `https://SEU-APP.onrender.com/${id}.${format}`;
-
-    history.push({
-      user: req.user.user,
-      link,
-      format,
-      url
-    });
-
-    res.json({ download: url });
+  proc.on("close", () => {
+    try {
+      const json = JSON.parse(data);
+      res.json({
+        title: json.title,
+        thumb: json.thumbnail
+      });
+    } catch {
+      res.json({ error: true });
+    }
   });
 });
 
-// 📜 HISTÓRICO
-app.get("/history", auth, (req, res) => {
-  const userHistory = history.filter(h => h.user === req.user.user);
-  res.json(userHistory);
+// progresso completo
+app.get("/progress", (req, res) => {
+  const { link, format } = req.query;
+
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+
+  const id = Date.now();
+  const file = `downloads/${id}.${format}`;
+
+  const args =
+    format === "mp3"
+      ? ["-x", "--audio-format", "mp3", "-o", file, link]
+      : ["-f", "mp4", "-o", file, link];
+
+  const proc = spawn("yt-dlp", args);
+
+  proc.stdout.on("data", (chunk) => {
+    const text = chunk.toString();
+
+    const percent = text.match(/(\d+(\.\d+)?)%/);
+    const speed = text.match(/at\s+([0-9.]+\w+\/s)/);
+    const eta = text.match(/ETA\s+([0-9:]+)/);
+
+    res.write(`data: ${JSON.stringify({
+      percent: percent ? percent[1] : null,
+      speed: speed ? speed[1] : null,
+      eta: eta ? eta[1] : null
+    })}\n\n`);
+  });
+
+  proc.on("close", () => {
+    res.write(`data: ${JSON.stringify({
+      done: true,
+      file: `${id}.${format}`
+    })}\n\n`);
+    res.end();
+  });
 });
 
 app.listen(3000, () => console.log("Rodando"));
